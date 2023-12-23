@@ -31,21 +31,33 @@
       - etcd-client
       - protobuf-compiler
     update_cache: yes
+  environment:
+    http_proxy: "http://192.168.61.1:7890"
+    https_proxy: "http://192.168.61.1:7890"
 
 - name: python prerequisites
   pip:
     name: openshift
+  environment:
+    http_proxy: "http://192.168.61.1:7890"
+    https_proxy: "http://192.168.61.1:7890"
 
 - name: gpg key
   ansible.builtin.apt_key:
     url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
     state: present
+  environment:
+    http_proxy: "http://192.168.61.1:7890"
+    https_proxy: "http://192.168.61.1:7890"
 
 - name: repository
   ansible.builtin.apt_repository:
     repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
     state: present
     filename: kubernetes
+  environment:
+    http_proxy: "http://192.168.61.1:7890"
+    https_proxy: "http://192.168.61.1:7890"
 
 - name: install
   ansible.builtin.apt:
@@ -54,6 +66,9 @@
       - kubeadm={{ k8s_version }}-*
       - kubectl={{ k8s_version }}-*
     update_cache: yes
+  environment:
+    http_proxy: "http://192.168.61.1:7890"
+    https_proxy: "http://192.168.61.1:7890"
 
 - name: hold kubernetes packages
   ansible.builtin.dpkg_selections:
@@ -69,11 +84,35 @@
     cmd: kubectl completion bash > /etc/bash_completion.d/kubectl
     creates: "/etc/bash_completion.d/kubectl"
 
+- name: make sure folder by harri
+  ansible.builtin.file:
+    path: /etc/systemd/system/containerd.service.d
+    state: directory
+
+- name: set proxy in config file for systemd by harri
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/containerd.service.d/http-proxy.conf
+    content: |
+      [Service]
+      Environment="HTTP_PROXY=http://192.168.61.1:7890"
+      Environment="HTTPS_PROXY=http://192.168.61.1:7890"
+      Environment="NO_PROXY=192.168.61.10,192.168.61.11,192.168.61.12,192.168.61.13,10.96.0.0/12,10.93.98.0/24,10.244.0.0/16,172.31.0.0/16,127.0.0.1"
+
+- name: restart containerd by harri
+  ansible.builtin.systemd:
+    state: restarted
+    daemon_reload: true
+    name: containerd
+
 - name: kubeadm init
   ansible.builtin.command:
     cmd: /usr/bin/kubeadm init --config /etc/kubernetes/kubeadm-init.yaml --upload-certs 
     creates: /etc/kubernetes/pki/ca.crt
   when: k8s_initial_master in ansible_facts['all_ipv4_addresses']
+  environment:
+    http_proxy: "http://192.168.61.1:7890"
+    https_proxy: "http://192.168.61.1:7890"
+    no_proxy: "192.168.61.10,192.168.61.11,192.168.61.12,192.168.61.13,10.96.0.0/12,10.93.98.0/24,10.244.0.0/16,172.31.0.0/16,127.0.0.1"
 
 - name: kubeadm join
   ansible.builtin.command:
@@ -153,6 +192,9 @@
     dest: /etc/kubernetes/components/longhorn.yaml
     mode: '0644'
   when: k8s_initial_master in ansible_facts['all_ipv4_addresses']
+  environment:
+    http_proxy: "http://192.168.61.1:7890"
+    https_proxy: "http://192.168.61.1:7890"
 
 - name: install longhorn
   kubernetes.core.k8s:
@@ -167,6 +209,9 @@
     dest: /etc/kubernetes/components/metrics-server.yaml
     mode: '0644'
   when: k8s_initial_master in ansible_facts['all_ipv4_addresses']
+  environment:
+    http_proxy: "http://192.168.61.1:7890"
+    https_proxy: "http://192.168.61.1:7890"
 
 - name: install metrics server
   kubernetes.core.k8s:
@@ -183,6 +228,9 @@
     dest: /etc/kubernetes/components/ingress-controller.yaml
     mode: '0644'
   when: k8s_initial_master in ansible_facts['all_ipv4_addresses']
+  environment:
+    http_proxy: "http://192.168.61.1:7890"
+    https_proxy: "http://192.168.61.1:7890"
 
 - name: install ingress controller
   kubernetes.core.k8s:
